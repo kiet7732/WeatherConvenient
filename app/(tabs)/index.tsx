@@ -1,75 +1,100 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import { getCurrentUVCoords } from '@/api/currentUV';
+import { getCurrentWeatherByCity } from '@/api/weatherApi';
+import { WeatherData } from '@/assets/types/WeatherData';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function HomeScreen() {
+  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    getCurrentWeatherByCity('Ho Chi Minh', 'metric')
+      .then(async (weather) => {
+        const lat = weather.coord.lat;
+        const lon = weather.coord.lon;
+        try {
+          const oneCall = await getCurrentUVCoords(lat, lon, 'metric');
+          if (isMounted && oneCall) {
+            setWeatherData(new WeatherData(weather, oneCall));
+          } else {
+            setError('Không lấy được dữ liệu chỉ số UV (One Call API)');
+          }
+        } catch (e: any) {
+          console.error('One Call Error Details:', e.message);
+          if (isMounted) setError(`Lỗi One Call: ${e.message}`);
+        }
+      })
+      .catch((e) => {
+        console.error('Weather API Error:', e.message);
+        if (isMounted) setError(e.message);
+      })
+      .finally(() => isMounted && setLoading(false));
+    return () => { isMounted = false; };
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#6C3EF5" />
+        <Text>Đang tải dữ liệu thời tiết...</Text>
+      </View>
+    );
+  }
+  if (error || !weatherData) {
+    return (
+      <View style={styles.center}>
+        <Text style={{ color: 'red' }}>Lỗi: {error || 'Không có dữ liệu'}</Text>
+      </View>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <ScrollView style={{ flex: 1, backgroundColor: 'white' }} contentContainerStyle={{ alignItems: 'center', paddingVertical: 24 }}>                
+      <View style={styles.infoBox}>
+        <Text style={styles.label}>Cảm giác như: <Text style={styles.value}>{weatherData.getFeelsLike()}°</Text></Text>
+        <Text style={styles.label}>Áp suất: <Text style={styles.value}>{weatherData.getPressure()} hPa</Text></Text>
+        <Text style={styles.label}>Độ ẩm: <Text style={styles.value}>{weatherData.getHumidity()}%</Text></Text>
+        <Text style={styles.label}>Điểm sương: <Text style={styles.value}>{weatherData.getDewPoint()}°</Text></Text>
+        <Text style={styles.label}>Tốc độ gió: <Text style={styles.value}>{weatherData.getWindSpeed()} m/s</Text></Text>
+        <Text style={styles.label}>Hướng gió: <Text style={styles.value}>{weatherData.getWindDirection()}°</Text></Text>
+        <Text style={styles.label}>Độ che phủ mây: <Text style={styles.value}>{weatherData.getCloudiness()}%</Text></Text>
+        <Text style={styles.label}>Tầm nhìn: <Text style={styles.value}>{weatherData.getVisibility()} km</Text></Text>
+        <Text style={styles.label}>Chỉ số UV: <Text style={styles.value}>{weatherData.getUVIndex()}</Text></Text>
+        <Text style={styles.label}>Lượng mưa: <Text style={styles.value}>{weatherData.getRainfall()} mm</Text></Text>
+        <Text style={styles.label}>Lượng tuyết: <Text style={styles.value}>{weatherData.getSnowfall()} mm</Text></Text>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  center: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    backgroundColor: 'white',
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  infoBox: {
+    marginTop: 16,
+    backgroundColor: '#f3f3fa',
+    borderRadius: 16,
+    padding: 16,
+    width: 340,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  label: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 4,
+  },
+  value: {
+    fontWeight: 'bold',
+    color: '#6C3EF5',
   },
 });
