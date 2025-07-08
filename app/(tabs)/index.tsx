@@ -1,71 +1,129 @@
-import { getCurrentUVCoords } from '@/api/currentUV';
-import { getCurrentWeatherByCity } from '@/api/weatherApi';
-import { WeatherData } from '@/assets/types/WeatherData';
-import React, { useEffect, useState } from 'react';
+import { getCoordsByCity, getSevenDayForecastByCoords } from '@/api/openMeteoApi';
+import { SevenDayForecastData } from '@/assets/types/SevenDayForecastData';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+async function getUVIndexForDay(lat: number, lon: number, date: Date): Promise<number | null> {
+  // currentUV chỉ trả về UV hiện tại, không có UV từng ngày, nên chỉ lấy UV cho ngày hiện tại
+  try {
+    const { getCurrentUVCoords } = await import('@/api/currentUV');
+    const uv = await getCurrentUVCoords(lat, lon, 'metric');
+    return typeof uv.uvi === 'number' ? uv.uvi : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function HomeScreen() {
-  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+  const [city] = useState('Ho Chi Minh'); // Có thể thay đổi thành input nếu muốn
+  const [forecastData, setForecastData] = useState<SevenDayForecastData | null>(null);
+  const [uvIndex, setUvIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    getCurrentWeatherByCity('Ho Chi Minh', 'metric')
-      .then(async (weather) => {
-        const lat = weather.coord.lat;
-        const lon = weather.coord.lon;
-        try {
-          const oneCall = await getCurrentUVCoords(lat, lon, 'metric');
-          if (isMounted && oneCall) {
-            setWeatherData(new WeatherData(weather, oneCall));
-          } else {
-            setError('Không lấy được dữ liệu chỉ số UV (One Call API)');
-          }
-        } catch (e: any) {
-          console.error('One Call Error Details:', e.message);
-          if (isMounted) setError(`Lỗi One Call: ${e.message}`);
-        }
+    setLoading(true);
+    setError(null);
+    setUvIndex(null);
+    let lat = 0, lon = 0;
+    getCoordsByCity(city)
+      .then((coords) => {
+        lat = coords.lat;
+        lon = coords.lon;
+        return getSevenDayForecastByCoords(lat, lon);
+      })
+      .then((forecast) => {
+        if (isMounted) setForecastData(new SevenDayForecastData(forecast));
+        // Lấy UV cho ngày hiện tại (currentUV không hỗ trợ 7 ngày)
+        return getUVIndexForDay(lat, lon, new Date());
+      })
+      .then((uv) => {
+        if (isMounted) setUvIndex(uv);
       })
       .catch((e) => {
-        console.error('Weather API Error:', e.message);
         if (isMounted) setError(e.message);
       })
       .finally(() => isMounted && setLoading(false));
     return () => { isMounted = false; };
-  }, []);
+  }, [city]);
 
   if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#6C3EF5" />
-        <Text>Đang tải dữ liệu thời tiết...</Text>
+        <Text>Đang tải dự báo 7 ngày...</Text>
       </View>
     );
   }
-  if (error || !weatherData) {
+  if (error || !forecastData) {
     return (
       <View style={styles.center}>
-        <Text style={{ color: 'red' }}>Lỗi: {error || 'Không có dữ liệu'}</Text>
+        <Text style={{ color: 'red' }}>Lỗi: {error || 'Không có dữ liệu dự báo'}</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: 'white' }} contentContainerStyle={{ alignItems: 'center', paddingVertical: 24 }}>                
-      <View style={styles.infoBox}>
-        <Text style={styles.label}>Cảm giác như: <Text style={styles.value}>{weatherData.getFeelsLike()}°</Text></Text>
-        <Text style={styles.label}>Áp suất: <Text style={styles.value}>{weatherData.getPressure()} hPa</Text></Text>
-        <Text style={styles.label}>Độ ẩm: <Text style={styles.value}>{weatherData.getHumidity()}%</Text></Text>
-        <Text style={styles.label}>Điểm sương: <Text style={styles.value}>{weatherData.getDewPoint()}°</Text></Text>
-        <Text style={styles.label}>Tốc độ gió: <Text style={styles.value}>{weatherData.getWindSpeed()} m/s</Text></Text>
-        <Text style={styles.label}>Hướng gió: <Text style={styles.value}>{weatherData.getWindDirection()}°</Text></Text>
-        <Text style={styles.label}>Độ che phủ mây: <Text style={styles.value}>{weatherData.getCloudiness()}%</Text></Text>
-        <Text style={styles.label}>Tầm nhìn: <Text style={styles.value}>{weatherData.getVisibility()} km</Text></Text>
-        <Text style={styles.label}>Chỉ số UV: <Text style={styles.value}>{weatherData.getUVIndex()}</Text></Text>
-        <Text style={styles.label}>Lượng mưa: <Text style={styles.value}>{weatherData.getRainfall()} mm</Text></Text>
-        <Text style={styles.label}>Lượng tuyết: <Text style={styles.value}>{weatherData.getSnowfall()} mm</Text></Text>
-      </View>
+    <ScrollView style={{ flex: 1, backgroundColor: 'white' }} contentContainerStyle={{ alignItems: 'center', paddingVertical: 24 }}>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 16 }}>Dự báo 7 ngày cho {city}</Text>
+      {forecastData.getAllDays().map((day, idx) => (
+        <View key={day.dt} style={styles.infoBox}>
+          <Text style={styles.label}>
+            Ngày: <Text style={styles.value}>{new Date(day.dt * 1000).toLocaleDateString('vi-VN')}</Text>
+          </Text>
+          <Text style={styles.label}>
+            Nhiệt độ trung bình: <Text style={styles.value}>{day.temp.day.toFixed(1)}°C</Text>
+          </Text>
+          <Text style={styles.label}>
+            Nhiệt độ thấp nhất: <Text style={styles.value}>{day.temp.min.toFixed(1)}°C</Text>
+          </Text>
+          <Text style={styles.label}>
+            Nhiệt độ cao nhất: <Text style={styles.value}>{day.temp.max.toFixed(1)}°C</Text>
+          </Text>
+          <Text style={styles.label}>
+            Nhiệt độ sáng: <Text style={styles.value}>{day.temp.morn.toFixed(1)}°C</Text>
+          </Text>
+          <Text style={styles.label}>
+            Nhiệt độ chiều: <Text style={styles.value}>{day.temp.eve.toFixed(1)}°C</Text>
+          </Text>
+          <Text style={styles.label}>
+            Nhiệt độ đêm: <Text style={styles.value}>{day.temp.night.toFixed(1)}°C</Text>
+          </Text>
+          <Text style={styles.label}>
+            Thời tiết: <Text style={styles.value}>{day.weather[0]?.description}</Text>
+          </Text>
+          <Text style={styles.label}>
+            Áp suất: <Text style={styles.value}>{day.pressure} hPa</Text>
+          </Text>
+          <Text style={styles.label}>
+            Độ ẩm: <Text style={styles.value}>{day.humidity}%</Text>
+          </Text>
+          <Text style={styles.label}>
+            Tốc độ gió: <Text style={styles.value}>{day.wind_speed} m/s</Text>
+          </Text>
+          <Text style={styles.label}>
+            Hướng gió: <Text style={styles.value}>{day.wind_deg}°</Text>
+          </Text>
+          <Text style={styles.label}>
+            Độ che phủ mây: <Text style={styles.value}>{day.clouds}%</Text>
+          </Text>
+          <Text style={styles.label}>
+            Chỉ số UV: <Text style={styles.value}>{day.uvi}</Text>
+          </Text>
+          <Text style={styles.label}>
+            Lượng mưa: <Text style={styles.value}>{day.rain ?? 0} mm</Text>
+          </Text>
+          <Text style={styles.label}>
+            Lượng tuyết: <Text style={styles.value}>{day.snow ?? 0} mm</Text>
+          </Text>
+          {idx === 0 && (
+            <Text style={styles.label}>
+              UV (currentUV): <Text style={styles.value}>{uvIndex !== null ? uvIndex : 'Không có'}</Text>
+            </Text>
+          )}
+        </View>
+      ))}
     </ScrollView>
   );
 }

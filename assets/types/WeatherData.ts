@@ -1,4 +1,5 @@
-import type { CurrentWeather } from '../types/weather';
+import { CurrentWeather } from "./WeatherInterfaces";
+
 
 export class WeatherData {
 
@@ -83,51 +84,49 @@ export class WeatherData {
 
     // Lấy URL icon từ OpenWeatherMap (giữ nguyên cho icon online)
     // getIconUrl(): { uri: string } {
-        // return { uri: `https://openweathermap.org/img/wn/${this.weather.weather[0].icon}@4x.png` };
+    // return { uri: `https://openweathermap.org/img/wn/${this.weather.weather[0].icon}@4x.png` };
     // }
 
-    // Lấy đường dẫn chuỗi icon SVG nội bộ từ iconMap (dùng cho debug hoặc hiển thị text)
-    getIconUrl(): string {
-        const icon = this.getCustomIcon();
-        // icon có dạng: { default: ... } hoặc là số (nếu require trả về số), nên lấy tên file từ key
-        // Đơn giản nhất: trả về tên file dựa trên logic đã chọn
-        const weatherId = this.weather.weather[0].id;
-        const cloudiness = this.weather.clouds.all;
-        const isNight = new Date().getHours() >= 18 || new Date().getHours() < 6;
-        if (weatherId >= 200 && weatherId <= 232) return 'thunderstorm.svg';
-        if (weatherId >= 500 && weatherId <= 504) return 'rainy_cloud.svg';
-        if (weatherId === 800) return isNight ? 'moon_cloud_stars.svg' : 'light_clouds_sun.svg';
-        if (weatherId >= 801 && weatherId <= 804) {
-            if (cloudiness === 100) return 'rainy_cloud1.svg';
-            return 'cloudy_sun.svg';
-        }
-        return '5.svg';
-    }
-
-    // Chọn icon tùy chỉnh từ bộ sưu tập của bạn
-    private iconMap: Record<string, any> = {
-        thunderstorm: require('assets/images/thunderstorm.svg'),
-        rainy_cloud: require('assets/images/rainy_cloud.svg'),
-        rainy_cloud1: require('assets/images/rainy_cloud1.svg'),
-        moon_cloud_stars: require('assets/images/moon_cloud_stars.svg'),
-        light_clouds_sun: require('assets/images/light_clouds_sun.svg'),
-        cloudy_sun: require('assets/images/5.svg'),
-        '5': require('assets/images/5.svg'),
-    };
-
     getCustomIcon(): any {
-        const weatherId = this.weather.weather[0].id;
-        const cloudiness = this.weather.clouds.all;
-        const isNight = new Date().getHours() >= 18 || new Date().getHours() < 6;
-
-        if (weatherId >= 200 && weatherId <= 232) return this.iconMap.thunderstorm;
-        if (weatherId >= 500 && weatherId <= 504) return this.iconMap.rainy_cloud;
-        if (weatherId === 800) return isNight ? this.iconMap.moon_cloud_stars : this.iconMap.light_clouds_sun;
-        if (weatherId >= 801 && weatherId <= 804) {
-            if (cloudiness === 100) return this.iconMap.rainy_cloud1;
-            return this.iconMap.cloudy_sun;
-        }
-        return this.iconMap['5'];
+        const weatherCode = this.weather.weather[0].id;
+        // Xác định ban ngày hay ban đêm
+        const hour = new Date().getHours();
+        const isDay = hour >= 6 && hour < 18;
+        // Map weatherCode sang icon tuỳ chỉnh cho ngày và đêm
+        const iconMap: Record<number, { day: any; night: any }> = {
+            0: { day: require('assets/iconWeather/clear_sky_day.svg'), night: require('assets/iconWeather/clear_sky_night.svg') }, // Trời quang đãng
+            1: { day: require('assets/iconWeather/clear_sky_day.svg'), night: require('assets/iconWeather/clear_sky_night.svg') }, // Gần như quang đãng
+            2: { day: require('assets/iconWeather/partly_cloud.svg'), night: require('assets/iconWeather/partly_cloud.svg') }, // Có mây từng phần
+            3: { day: require('assets/iconWeather/partly_cloud.svg'), night: require('assets/iconWeather/partly_cloud.svg') }, // Nhiều mây
+            45: { day: require('assets/iconWeather/fog.svg'), night: require('assets/iconWeather/fog.svg') }, // Sương mù
+            48: { day: require('assets/iconWeather/fog.svg'), night: require('assets/iconWeather/fog.svg') }, // Sương mù đóng băng
+            51: { day: require('assets/iconWeather/drizzle.svg'), night: require('assets/iconWeather/drizzle.svg') }, // Mưa phùn nhẹ
+            53: { day: require('assets/iconWeather/drizzle.svg'), night: require('assets/iconWeather/drizzle.svg') }, // Mưa phùn
+            55: { day: require('assets/iconWeather/drizzle1.svg'), night: require('assets/iconWeather/drizzle1.svg') }, // Mưa phùn nặng
+            56: { day: require('assets/iconWeather/freezing_rain.svg'), night: require('assets/iconWeather/freezing_rain.svg') }, // Mưa phùn đóng băng nhẹ
+            57: { day: require('assets/iconWeather/freezing_rain.svg'), night: require('assets/iconWeather/freezing_rain.svg') }, // Mưa phùn đóng băng nặng
+            61: { day: require('assets/iconWeather/rainy_cloud_night.svg'), night: require('assets/iconWeather/rainy_cloud_night.svg') }, // Mưa nhẹ
+            63: { day: require('assets/iconWeather/rainy_cloud_night.svg'), night: require('assets/iconWeather/rainy_cloud_night.svg') }, // Mưa vừa
+            65: { day: require('assets/iconWeather/rainy_cloud_night1.svg'), night: require('assets/iconWeather/rainy_cloud_night1.svg') }, // Mưa nặng
+            66: { day: require('assets/iconWeather/freezing_rain.svg'), night: require('assets/iconWeather/freezing_rain.svg') }, // Mưa đóng băng nhẹ
+            67: { day: require('assets/iconWeather/freezing_rain.svg'), night: require('assets/iconWeather/freezing_rain.svg') }, // Mưa đóng băng nặng
+            71: { day: require('assets/iconWeather/snow.svg'), night: require('assets/iconWeather/snow.svg') }, // Tuyết rơi nhẹ
+            73: { day: require('assets/iconWeather/snow.svg'), night: require('assets/iconWeather/snow.svg') }, // Tuyết rơi vừa
+            75: { day: require('assets/iconWeather/snow.svg'), night: require('assets/iconWeather/snow.svg') }, // Tuyết rơi nặng
+            77: { day: require('assets/iconWeather/snow1.svg'), night: require('assets/iconWeather/snow1.svg') }, // Hạt tuyết
+            80: { day: require('assets/iconWeather/rain_showers_night.svg'), night: require('assets/iconWeather/rain_showers_night.svg') }, // Mưa rào nhẹ
+            81: { day: require('assets/iconWeather/rain_showers_night.svg'), night: require('assets/iconWeather/rain_showers_night.svg') }, // Mưa rào vừa
+            82: { day: require('assets/iconWeather/rain_showers_night.svg'), night: require('assets/iconWeather/rain_showers_night.svg') }, // Mưa rào nặng
+            85: { day: require('assets/iconWeather/snow.svg'), night: require('assets/iconWeather/snow.svg') }, // Mưa tuyết nhẹ
+            86: { day: require('assets/iconWeather/snow.svg'), night: require('assets/iconWeather/snow.svg') }, // Mưa tuyết nặng
+            95: { day: require('assets/iconWeather/snow.svg'), night: require('assets/iconWeather/snow.svg') }, // Dông
+            96: { day: require('assets/iconWeather/snow.svg'), night: require('assets/iconWeather/snow.svg') }, // Dông nhẹ
+            99: { day: require('assets/iconWeather/snow.svg'), night: require('assets/iconWeather/snow.svg') }, // Dông nặng
+        };
+        const iconSet = iconMap[weatherCode] || { day: require('assets/iconWeather/cloud.svg'), night: require('assets/iconWeather/cloud.svg') };
+        return isDay ? iconSet.day : iconSet.night;
     }
+
+
 }
 
