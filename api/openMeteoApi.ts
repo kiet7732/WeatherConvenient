@@ -1,7 +1,8 @@
 import { weatherCodeMap } from '@/assets/types/weatherCodeMap';
-import type { CurrentWeather } from '@/assets/types/WeatherInterfaces';
-import { DailyWeather, SevenDayForecast } from '@/assets/types/WeatherInterfaces';
+import type { CurrentWeather, FullWeatherData } from '@/assets/types/WeatherInterfaces';
+import { DailyWeather, HourlyWeather, SevenDayForecast } from '@/assets/types/WeatherInterfaces';
 import { getWeatherSupplementByCity } from './weatherApiSupplement';
+import { getWeatherIconByCode } from '@/utils/weatherUtils';
 
 // Lấy toạ độ từ tên thành phố (Open-Meteo geocoding)
 export async function getCoordsByCity(city: string): Promise<{ lat: number; lon: number; name: string; country: string }> {
@@ -23,6 +24,13 @@ export async function getSevenDayForecastByCoords(lat: number, lon: number): Pro
   const daily: DailyWeather[] = data.daily.time.map((date: string, idx: number) => {
     const weatherCode = data.daily.weathercode[idx];
     const weatherMap = weatherCodeMap[weatherCode] || { main: 'Unknown', description: 'Không xác định', icon: '01d' };
+
+    // Tạo time string cho giữa ngày (12:00) để lấy icon ban ngày
+    const midDayTime = `${date}T12:00`;
+
+    // Gọi getWeatherIconByCode để lấy icon thực tế
+    const actualIcon = getWeatherIconByCode(weatherCode, midDayTime);
+
     return {
       dt: Math.floor(new Date(date).getTime() / 1000),
       temp: {
@@ -37,7 +45,7 @@ export async function getSevenDayForecastByCoords(lat: number, lon: number): Pro
         id: weatherCode,
         main: weatherMap.main,
         description: weatherMap.description,
-        icon: weatherMap.icon,
+        icon: actualIcon,
       }],
       pressure: 1013,
       humidity: 70,
@@ -70,6 +78,12 @@ export async function getCurrentWeatherByCity(city: string): Promise<CurrentWeat
   const weatherCode = data.current_weather.weathercode;
   const weatherMap = weatherCodeMap[weatherCode] || { main: 'Unknown', description: 'Không xác định', icon: '01d' };
 
+  // Tạo time string cho thời điểm hiện tại
+  const currentTime = new Date().toISOString();
+
+  // Gọi getWeatherIconByCode để lấy icon thực tế
+  const actualIcon = getWeatherIconByCode(weatherCode, currentTime);
+
   // Map về interface CurrentWeather
   const current: CurrentWeather = {
     coord: { lat, lon },
@@ -77,7 +91,7 @@ export async function getCurrentWeatherByCity(city: string): Promise<CurrentWeat
       id: weatherCode,
       main: weatherMap.main,
       description: weatherMap.description,
-      icon: weatherMap.icon,
+      icon: actualIcon,
     }],
     main: {
       temp: data.current_weather.temperature,
@@ -133,4 +147,57 @@ export async function getFullCurrentWeatherByCity(city: string): Promise<Current
     },
     visibility: supplement.visibility ?? openMeteoCurrent.visibility,
   };
-} 
+}
+
+//lay theo 24h
+export async function getHourlyWeatherByCityAndDate(city: string, date: string): Promise<HourlyWeather[]> {
+  const { lat, lon } = await getCoordsByCity(city);
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,weathercode&start_date=${date}&end_date=${date}&timezone=auto`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!data.hourly) throw new Error('Không lấy được dữ liệu thời tiết theo giờ');
+
+  const result: HourlyWeather[] = data.hourly.time.map((time: string, idx: number) => {
+    const weatherCode = data.hourly.weathercode[idx];
+    const weatherMap = weatherCodeMap[weatherCode] || { main: 'Unknown', description: 'Không xác định', icon: '01d' };
+
+    const actualIcon = getWeatherIconByCode(weatherCode, time); //icon 
+
+    return {
+      time,
+      temperature: data.hourly.temperature_2m[idx],
+      weathercode: weatherCode,
+      main: weatherMap.main,
+      description: weatherMap.description,
+      icon: actualIcon,
+    };
+  });
+
+  return result;
+}
+
+export async function getFullWeatherDataByCity(city: string, date: string): Promise<FullWeatherData> {
+  // Lấy tọa độ trước vì các API khác cần lat, lon
+  const { lat, lon, name, country } = await getCoordsByCity(city);
+
+  // Gọi song song các API còn lại
+  const [
+    current,
+    currentFull,
+    sevenDay,
+    hourly
+  ] = await Promise.all([
+    getCurrentWeatherByCity(city),
+    getFullCurrentWeatherByCity(city),
+    getSevenDayForecastByCoords(lat, lon),
+    getHourlyWeatherByCityAndDate(city, date)
+  ]);
+
+  return {
+    coord: { lat, lon },
+    current,
+    currentFull,
+    sevenDay,
+    hourly,
+  };
+}
