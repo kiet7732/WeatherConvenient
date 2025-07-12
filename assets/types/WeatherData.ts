@@ -127,6 +127,5 @@ export class WeatherData {
         return isDay ? iconSet.day : iconSet.night;
     }
 
-
 }
 

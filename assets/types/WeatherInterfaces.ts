@@ -53,7 +53,7 @@ export interface CurrentWeather { //public
   visibility: number;
   name: string;
   sys: Sys;
-  uv?: number; 
+  uv?: number;
 }
 
 export interface OneCallCurrent {
@@ -88,4 +88,26 @@ export interface SevenDayForecast {
   lat: number;
   lon: number;
   timezone: string;
+}
+
+export interface HourlyWeather {
+  time: string; // ISO string, ví dụ: "2024-06-09T01:00"
+  temperature: number;
+  weathercode: number;
+  main: string;         // Thêm trường này
+  description: string;  // Thêm trường này
+  icon: string;         // Thêm trường này
+}
+
+export interface OneDayHourlyWeather {
+  date: string; // "2024-06-09"
+  hours: HourlyWeather[]; // 24 phần tử
+}
+
+export interface FullWeatherData {
+  coord: Coord;
+  current: CurrentWeather; // Thời tiết hiện tại (Open-Meteo)
+  currentFull: CurrentWeather; // Thời tiết hiện tại đầy đủ (Open-Meteo + WeatherAPI)
+  sevenDay: SevenDayForecast;
+  hourly: HourlyWeather[]; // 24 giờ của ngày truyền vào
 }
